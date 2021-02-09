@@ -1,0 +1,228 @@
+/*----------------------------------------------------------------------------*/
+/* Copyright (c) 2017-2019 FIRST. All Rights Reserved.                        */
+/* Open Source Software - may be modified and shared by FRC teams. The code   */
+/* must be accompanied by the FIRST BSD license file in the root directory of */
+/* the project.                                                               */
+/*----------------------------------------------------------------------------*/
+
+package frc.robot;
+
+import edu.wpi.first.wpilibj.GenericHID.Hand;
+import edu.wpi.first.wpilibj.I2C.Port;
+
+import com.ctre.phoenix.motorcontrol.can.WPI_VictorSPX;
+import com.revrobotics.ColorMatch;
+import com.revrobotics.ColorMatchResult;
+import com.revrobotics.ColorSensorV3;
+
+import edu.wpi.first.cameraserver.CameraServer;
+import edu.wpi.first.wpilibj.DoubleSolenoid;
+import edu.wpi.first.wpilibj.I2C;
+import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.Solenoid;
+import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.drive.DifferentialDrive;
+import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj.util.Color;
+
+/**
+ * This is a demo program showing the use of the DifferentialDrive class.
+ * Runs the motors with split arcade steering and an Xbox controller.
+ */
+public class Robot extends TimedRobot {
+  
+  
+  private final ColorMatch m_colorMatcher = new ColorMatch();
+
+  private final I2C.Port i2cPort = I2C.Port.kOnboard;
+  private final ColorSensorV3 m_colorsensor = new ColorSensorV3(i2cPort);
+  private final WPI_VictorSPX m_leftMotor = new WPI_VictorSPX(0);
+  private final WPI_VictorSPX m_leftMotorSlave = new WPI_VictorSPX(1);
+
+  private final WPI_VictorSPX m_rightMotor = new WPI_VictorSPX(2);
+  private final WPI_VictorSPX m_rightMotorSlave = new WPI_VictorSPX(3);
+
+  private final WPI_VictorSPX m_colorMotor = new WPI_VictorSPX(9);
+
+  private final WPI_VictorSPX m_intakeMotor = new WPI_VictorSPX(10);
+
+
+  private final DifferentialDrive m_robotDrive = new DifferentialDrive(m_rightMotor, m_leftMotor);
+  private final XboxController m_xboxController = new XboxController(0);
+  private final Joystick m_Joystick = new Joystick(0);
+  private final Color kBlueTarget = ColorMatch.makeColor(0.121,0.428,0.447);
+  private final Color kGreenTarget = ColorMatch.makeColor(0.164,0.584,0.25);
+  private final Color kRedTarget = ColorMatch.makeColor(0.524,0.347,0.129);
+  private final Color kYellowTarget = ColorMatch.makeColor(0.314,0.564,0.121);
+
+  // yellow = 6500R, 11850  2568 
+  // red = 
+  
+    private final Solenoid m_color = new Solenoid(2);
+
+ //   private final Solenoid m_down = new Solenoid(1);
+    // DoubleSolenoid corresponds to a double solenoid.
+    private final DoubleSolenoid m_doubleSolenoid = new DoubleSolenoid(0, 1);
+
+    // private static final int kSolenoidButton = 1;
+    private static final int kDoubleSolenoidForward = 5;
+    private static final int kDoubleSolenoidReverse = 3;
+    private static final int kDoubleSolenoidOff = 9;
+  
+    private int sol_width=4;
+    private int sol_cycles=6;
+  
+    private int st = 0;
+    private DoubleSolenoid.Value st_target_dir;
+
+    private void SetSolenoid(DoubleSolenoid.Value dir) {
+     m_doubleSolenoid.set( dir );
+
+      SmartDashboard.putString("Sol", (dir == DoubleSolenoid.Value.kForward ? "up": "down") );
+
+    }
+  @Override
+  public void teleopInit() {
+    super.teleopInit();
+
+  CameraServer.getInstance().startAutomaticCapture();
+
+    m_leftMotorSlave.follow(m_leftMotor);
+    m_rightMotorSlave.follow(m_rightMotor);
+
+    m_colorMatcher.addColorMatch(kBlueTarget);
+    m_colorMatcher.addColorMatch(kGreenTarget);
+    m_colorMatcher.addColorMatch(kRedTarget);
+    m_colorMatcher.addColorMatch(kYellowTarget);
+      
+st = 0;
+
+  }
+
+  @Override
+  public void teleopPeriodic() {
+    // Drive with split arcade drive.
+    // That means that the Y axis of the left stick moves forward
+    // and backward, and the X of the right stick turns left and right.
+    
+ //   m_robotDrive.arcadeDrive(m_driverController.getY(Hand.kLeft),
+ //       m_driverController.getX(Hand.kRight));
+
+    m_robotDrive.arcadeDrive(  m_Joystick.getY(), m_Joystick.getX() );
+    
+    /*
+     * In order to set the double solenoid, if just one button
+     * is pressed, set the solenoid to correspond to that button.
+     * If both are pressed, set the solenoid will be set to Forwards.
+     */
+
+    if (st > 0) {
+      if ( (st % sol_width) == 0) {
+        
+        if ( (st % (sol_width*2)) == 0 ) {
+          SetSolenoid( st_target_dir );
+
+        } else {
+          SetSolenoid( st_target_dir == DoubleSolenoid.Value.kForward ? DoubleSolenoid.Value.kReverse : DoubleSolenoid.Value.kForward );
+
+        }
+      }
+  
+      st++;
+      if (st == (sol_width*sol_cycles) ) {
+       st = 0;
+      }
+
+    } else {
+      if (m_Joystick.getRawButton(kDoubleSolenoidForward)) {
+        st_target_dir = DoubleSolenoid.Value.kForward;
+        st = 1;
+        SetSolenoid(st_target_dir);
+
+      } else if (m_Joystick.getRawButton(kDoubleSolenoidReverse)) {
+  //      m_up.set(false);
+  //      m_down.set(true);
+        st_target_dir = DoubleSolenoid.Value.kReverse;
+        st = 1;
+        SetSolenoid(st_target_dir);
+
+      }
+      // else if (m_Joystick.getRawButton(kDoubleSolenoidOff)) {
+       // m_up.set(true);
+       // m_down.set(true);
+//        st = 0;
+//        SmartDashboard.putString("Sol", "mid");
+//             m_doubleSolenoid.set(DoubleSolenoid.Value.kOff);
+     // }
+  
+    }
+
+    if (m_Joystick.getRawButtonPressed(8)) {
+      sol_width++;
+    } else if (m_Joystick.getRawButtonPressed(7))  {
+      sol_width--;
+    } else if (m_Joystick.getRawButtonPressed(10))  {
+      sol_cycles++;
+    } else if (m_Joystick.getRawButtonPressed(9)) {
+      sol_cycles--;
+    } else if (m_Joystick.getRawButtonPressed(12)) {
+      m_color.set(true);
+    } else if (m_Joystick.getRawButtonPressed(11)) {
+      m_color.set(false);
+      
+    }
+
+   Color detected = m_colorsensor.getColor();
+
+    ColorMatchResult match = m_colorMatcher.matchClosestColor( m_colorsensor.getColor());
+    double speed = m_Joystick.getThrottle();
+    SmartDashboard.putNumber("Red", detected.red);
+    SmartDashboard.putNumber("Green", detected.green);
+    SmartDashboard.putNumber("Blue", detected.blue);
+
+    SmartDashboard.putNumber("Cycles", sol_cycles);
+    SmartDashboard.putNumber("Width", sol_width);
+
+    SmartDashboard.putNumber("Proximity", m_colorsensor.getProximity());
+
+    String matched = "None";
+
+    if (match.confidence > 0.91) {
+      if (match.color == kBlueTarget) {
+        matched = "Blue";
+      } else if (match.color == kRedTarget) {
+        matched = "Red";
+      } else if (match.color == kGreenTarget) {
+        matched = "Green";
+      } else if (match.color == kYellowTarget) {
+        matched = "Yellow";
+      }
+    }
+    
+
+  
+    SmartDashboard.putString("ColorMatched", matched);
+    SmartDashboard.putNumber("Confidence", match.confidence);
+    SmartDashboard.putNumber("State", st);
+    SmartDashboard.putNumber("speed", speed);
+
+    m_intakeMotor.set( m_Joystick.getRawButton(1) ? speed : 0 );
+
+    m_colorMotor.set( m_Joystick.getRawButton(2) ? .2 : 0 );
+  }
+
+  /**
+   * 
+   * advanceToColorWheel
+   * 
+   * Raise arm and advance slowly until wheel deteted by proximity sensor
+   * 
+   */
+
+  private void AdvanceToControlPanel() {
+
+    
+  }
+}
